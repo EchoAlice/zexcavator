@@ -337,22 +337,25 @@ impl SyncView {
             );
         }
 
-        // Report balance from account 0 (multi-account aggregation is a follow-up)
-        let balances = light_client
-            .wallet
-            .lock()
-            .await
-            .account_balance(zip32::AccountId::try_from(0).unwrap())
-            .await
-            .unwrap();
-        let final_balance = balances.total_transparent_balance.unwrap()
-            + balances.total_sapling_balance.unwrap()
-            + balances.total_orchard_balance.unwrap();
-        let balance_in_zec = final_balance.unwrap() / NonZero::new(10u64.pow(8)).unwrap();
+        // Report total balance across all accounts
+        let wallet_guard = light_client.wallet.lock().await;
+        let mut total_zat: u64 = 0;
+        for i in 0..no_of_accounts {
+            let account_id = zip32::AccountId::try_from(i).unwrap();
+            if let Ok(b) = wallet_guard.account_balance(account_id).await {
+                let pool_sum = b.total_transparent_balance.unwrap()
+                    + b.total_sapling_balance.unwrap()
+                    + b.total_orchard_balance.unwrap();
+                if let Some(zat) = pool_sum {
+                    total_zat += u64::from(zat);
+                }
+            }
+        }
+        drop(wallet_guard);
         self.log_buffer
             .lock()
             .unwrap()
-            .push(format!("Total ZEC found: {}", balance_in_zec.into_u64()));
+            .push(format!("Total ZEC found: {}", total_zat / 10u64.pow(8)));
         *self.sync_complete.lock().unwrap() = true;
 
         light_client
@@ -457,21 +460,24 @@ mod tests {
                 vec.mnemonic, vec.birthday
             );
 
-            let balances = client
-                .wallet
-                .lock()
-                .await
-                .account_balance(zip32::AccountId::try_from(0).unwrap())
-                .await
-                .unwrap();
-            let final_balance = balances.total_transparent_balance.unwrap()
-                + balances.total_sapling_balance.unwrap()
-                + balances.total_orchard_balance.unwrap();
-            let balance_in_zec = final_balance.unwrap() / NonZero::new(10u64.pow(8)).unwrap();
+            let wallet_guard = client.wallet.lock().await;
+            let mut total_zat: u64 = 0;
+            for acct in 0..5u32 {
+                let account_id = zip32::AccountId::try_from(acct).unwrap();
+                if let Ok(b) = wallet_guard.account_balance(account_id).await {
+                    let pool_sum = b.total_transparent_balance.unwrap()
+                        + b.total_sapling_balance.unwrap()
+                        + b.total_orchard_balance.unwrap();
+                    if let Some(zat) = pool_sum {
+                        total_zat += u64::from(zat);
+                    }
+                }
+            }
+            drop(wallet_guard);
 
             println!(
                 "Vector {i} passed! Found balance: {} ZEC",
-                balance_in_zec.into_u64()
+                total_zat / 10u64.pow(8)
             );
         }
     }
