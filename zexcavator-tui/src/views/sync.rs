@@ -215,39 +215,14 @@ impl SyncView {
                 .push(format!("Error installing crypto provider: {:?}", e));
         }
 
-        let zc = load_clientconfig(
-            Uri::from_static(DEFAULT_LIGHTWALLETD_SERVER),
-            None,
-            ChainType::Mainnet,
-            WalletSettings {
-                sync_config: SyncConfig {
-                    transparent_address_discovery: TransparentAddressDiscovery::recovery(),
-                },
-            },
-            NonZero::new(1).unwrap(),
-        )
-        .unwrap();
-
-        let mnemonic = Mnemonic::<English>::from_str(&mnemonic_str).unwrap();
-
         let birthday = birthday.unwrap_or_default();
-
-        let lw = LightWallet::new(
-            ChainType::Mainnet,
-            WalletBase::Mnemonic {
-                mnemonic: mnemonic,
-                no_of_accounts: NonZero::new(1).unwrap(),
+        let wallet_settings = WalletSettings {
+            sync_config: SyncConfig {
+                transparent_address_discovery: TransparentAddressDiscovery::recovery(),
             },
-            birthday.into(),
-            WalletSettings {
-                sync_config: SyncConfig {
-                    transparent_address_discovery: TransparentAddressDiscovery::recovery(),
-                },
-            },
-        )
-        .unwrap();
-
-        let mut light_client = LightClient::create_from_wallet(lw, zc, true).unwrap();
+        };
+        let mut light_client =
+            self.create_mnemonic_client(&mnemonic_str, birthday, 1, &wallet_settings);
 
         self.log_buffer
             .lock()
@@ -349,6 +324,34 @@ impl SyncView {
         }
 
         light_client
+    }
+
+    fn create_mnemonic_client(
+        &self,
+        mnemonic_str: &str,
+        birthday: u32,
+        no_of_accounts: u32,
+        wallet_settings: &WalletSettings,
+    ) -> LightClient {
+        let zc = load_clientconfig(
+            Uri::from_static(DEFAULT_LIGHTWALLETD_SERVER),
+            None,
+            ChainType::Mainnet,
+            wallet_settings.clone(),
+            NonZero::new(no_of_accounts).unwrap(),
+        )
+        .unwrap();
+        let lw = LightWallet::new(
+            ChainType::Mainnet,
+            WalletBase::Mnemonic {
+                mnemonic: Mnemonic::<English>::from_str(mnemonic_str).unwrap(),
+                no_of_accounts: NonZero::new(no_of_accounts).unwrap(),
+            },
+            birthday.into(),
+            wallet_settings.clone(),
+        )
+        .unwrap();
+        LightClient::create_from_wallet(lw, zc, true).unwrap()
     }
 }
 
