@@ -11,7 +11,7 @@ use pepper_sync::sync_status;
 use pepper_sync::wallet::OutputInterface;
 use tuirealm::ratatui::layout::{Constraint, Direction, Layout};
 use tuirealm::{Application, Frame, NoUserEvent};
-use zingolib::config::{ChainType, DEFAULT_LIGHTWALLETD_SERVER, load_clientconfig};
+use zingolib::config::{load_clientconfig, ChainType, DEFAULT_LIGHTWALLETD_SERVER};
 use zingolib::data::PollReport;
 use zingolib::lightclient::{self, LightClient};
 use zingolib::wallet::{LightWallet, WalletBase, WalletSettings};
@@ -226,16 +226,17 @@ impl SyncView {
             },
         };
         let mut no_of_accounts = INITIAL_WINDOW;
-        let mut light_client = self
-            .create_mnemonic_client(&mnemonic_str, birthday, no_of_accounts, &wallet_settings);
+        let mut light_client =
+            self.create_mnemonic_client(&mnemonic_str, birthday, no_of_accounts, &wallet_settings);
 
+        // Sync using the current account window; expand and retry if needed
         loop {
             self.log_buffer.lock().unwrap().push(format!(
                 "Scanning {} account(s) from birthday {}",
                 no_of_accounts, birthday
             ));
 
-            // Sync and poll until complete
+            // Start current wallet sync attempt
             match light_client.sync().await {
                 Ok(_) => {}
                 Err(e) => self
@@ -247,6 +248,8 @@ impl SyncView {
 
             let mut interval = tokio::time::interval(Duration::from_secs(1));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+            // Poll current wallet sync until completion
             loop {
                 interval.tick().await;
                 match light_client.poll_sync() {
@@ -255,18 +258,12 @@ impl SyncView {
                         let wallet = light_client.wallet.lock().await;
                         match sync_status(&*wallet).await {
                             Ok(status) => {
-                                self.log_buffer
-                                    .lock()
-                                    .unwrap()
-                                    .push(format!("{}", status));
+                                self.log_buffer.lock().unwrap().push(format!("{}", status));
                                 *self.progress.lock().unwrap() =
                                     status.percentage_total_outputs_scanned;
                             }
                             Err(e) => {
-                                self.log_buffer
-                                    .lock()
-                                    .unwrap()
-                                    .push(format!("{}", e));
+                                self.log_buffer.lock().unwrap().push(format!("{}", e));
                                 continue;
                             }
                         };
@@ -290,11 +287,7 @@ impl SyncView {
                                     .lock()
                                     .unwrap()
                                     .push("Sync resumed".to_string()),
-                                Err(e) => self
-                                    .log_buffer
-                                    .lock()
-                                    .unwrap()
-                                    .push(format!("{}", e)),
+                                Err(e) => self.log_buffer.lock().unwrap().push(format!("{}", e)),
                             }
                             continue;
                         }
@@ -392,14 +385,13 @@ impl SyncView {
 
 impl Mountable for SyncView {
     fn mount(app: &mut Application<Id, Msg, tuirealm::event::NoUserEvent>) -> anyhow::Result<()> {
-        assert!(
-            app.mount(
+        assert!(app
+            .mount(
                 Id::ProgressBar,
                 Box::new(SyncBar::default()),
                 Vec::default()
             )
-            .is_ok()
-        );
+            .is_ok());
         Ok(())
     }
 }
