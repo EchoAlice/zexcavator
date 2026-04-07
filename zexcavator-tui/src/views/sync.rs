@@ -306,10 +306,8 @@ impl SyncView {
                 .map(|note| u32::from(note.key_id().account_id))
                 .max();
 
-            let needs_expansion = match highest_active {
-                Some(h) => h >= no_of_accounts.saturating_sub(GAP_LIMIT),
-                None => false,
-            };
+            let needs_expansion =
+                needs_account_expansion(highest_active, no_of_accounts, GAP_LIMIT);
 
             if !needs_expansion {
                 break;
@@ -405,6 +403,13 @@ impl Renderable for SyncView {
             .split(f.area());
         app.view(&Id::ProgressBar, f, chunks[0]);
         app.view(&Id::SyncLog, f, chunks[1]);
+    }
+}
+
+fn needs_account_expansion(highest_active: Option<u32>, window: u32, gap_limit: u32) -> bool {
+    match highest_active {
+        Some(h) => h >= window.saturating_sub(gap_limit),
+        None => false,
     }
 }
 
