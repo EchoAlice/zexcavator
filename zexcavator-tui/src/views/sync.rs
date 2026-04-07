@@ -478,4 +478,27 @@ mod tests {
             );
         }
     }
+
+    mod expansion_predicate {
+        use super::super::needs_account_expansion;
+        #[test]
+        fn no_activity_does_not_expand() {
+            assert!(!needs_account_expansion(None, 10, 5));
+        }
+
+        #[test]
+        fn activity_below_threshold_does_not_expand() {
+            assert!(!needs_account_expansion(Some(4), 10, 5));
+        }
+
+        #[test]
+        fn activity_at_threshold_expands() {
+            assert!(needs_account_expansion(Some(5), 10, 5));
+        }
+
+        #[test]
+        fn saturating_sub_edge_case_expands() {
+            assert!(needs_account_expansion(Some(0), 3, 5));
+        }
+    }
 }
