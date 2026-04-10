@@ -295,16 +295,22 @@ impl SyncView {
                 }
             }
 
-            // Check highest account with any sapling note history (including spent)
-            let highest_active: Option<u32> = light_client
-                .wallet
-                .lock()
-                .await
+            // Check highest account with any shielded note history (including spent)
+            let wallet_guard = light_client.wallet.lock().await;
+            let sapling_max: Option<u32> = wallet_guard
                 .wallet_transactions
                 .values()
                 .flat_map(|tx| tx.sapling_notes())
                 .map(|note| u32::from(note.key_id().account_id))
                 .max();
+            let orchard_max: Option<u32> = wallet_guard
+                .wallet_transactions
+                .values()
+                .flat_map(|tx| tx.orchard_notes())
+                .map(|note| u32::from(note.key_id().account_id))
+                .max();
+            drop(wallet_guard);
+            let highest_active = sapling_max.max(orchard_max);
 
             let needs_expansion =
                 needs_account_expansion(highest_active, no_of_accounts, GAP_LIMIT);
