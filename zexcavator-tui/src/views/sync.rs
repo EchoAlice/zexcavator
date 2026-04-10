@@ -501,4 +501,44 @@ mod tests {
             assert!(needs_account_expansion(Some(0), 3, 5));
         }
     }
+
+    mod discovery_loop {
+        use super::super::needs_account_expansion;
+
+        /// Test-only helper that simulates repeated account-window expansion
+        /// decisions from canned per-round `highest_active` values.
+        fn simulate_discovery(initial_window: u32, gap_limit: u32, rounds: &[Option<u32>]) -> u32 {
+            let mut window = initial_window;
+            for highest_active in rounds {
+                if !needs_account_expansion(*highest_active, window, gap_limit) {
+                    break;
+                }
+                window += gap_limit;
+            }
+            window
+        }
+
+        #[test]
+        fn no_activity_no_expansion() {
+            assert_eq!(simulate_discovery(10, 5, &[None]), 10);
+        }
+
+        #[test]
+        fn one_expansion_then_settles() {
+            // Round 0: window=10, highest=8, threshold=5 → 8 >= 5 → expand to 15
+            // Round 1: window=15, highest=8, threshold=10 → 8 < 10 → stop
+            assert_eq!(simulate_discovery(10, 5, &[Some(8), Some(8)]), 15);
+        }
+
+        #[test]
+        fn two_expansions_then_settles() {
+            // Round 0: window=10, highest=7, threshold=5 → 7 >= 5 → expand to 15
+            // Round 1: window=15, highest=12, threshold=10 → 12 >= 10 → expand to 20
+            // Round 2: window=20, highest=12, threshold=15 → 12 < 15 → stop
+            assert_eq!(
+                simulate_discovery(10, 5, &[Some(7), Some(12), Some(12)]),
+                20
+            );
+        }
+    }
 }
